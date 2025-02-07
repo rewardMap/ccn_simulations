@@ -1,0 +1,5 @@
+rewardGym @ git+https://github.com/rewardMap/rewardGym.git@bug_fixes_adaptations
+jupyter
+jupytext
+seaborn
+tqdm
