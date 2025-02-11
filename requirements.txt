@@ -1,6 +1,8 @@
 rewardGym @ git+https://github.com/rewardMap/rewardGym.git
 jupyter
+jupyterlab
 jupytext
 seaborn
 tqdm
 joblib
+jupyterlab_latex
