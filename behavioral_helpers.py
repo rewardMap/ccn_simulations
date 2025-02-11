@@ -87,132 +87,6 @@ def add_risk_sensitive_meaning(data, response_left=0, response_right=1):
     )
 
     data.loc[response_events, "correct_response"] = (
-        risk_data.loc[response_events, "response_button"].astype(float)
-        == risk_data.loc[response_events, "save_or_correct"].astype(float)
-    ) * 1.0
-
-    return data
-
-
-def add_twostep_meaning(data):
-    matching_dict = {
-        "1-2": "expected",
-        "0-1": "expected",
-        "1-1": "unexpected",
-        "0-2": "unexpected",
-    }
-    reward_meaning = {0: "no-reward", 1: "reward"}
-
-    for fill_col in [
-        "stay",
-        "transition",
-        "transition_reward",
-        "rewarded",
-        "previous_rewarded",
-        "response_order",
-    ]:
-        data[fill_col] = ""
-
-    stage1 = data.eval("event_type=='stage-1-selection'")
-    
-    first_response = data.query("event_type=='response'").action.values[::2].astype(int)
-    second_response = (
-        data.query("event_type=='response'").action.values[1::2].astype(int)
-    )
-
-    reward = data.query("event_type == 'trial-end'").reward.values.astype(int)
-    transition = data.query(
-        "event_type=='stage-2-selection'"
-    ).current_location.values.astype(int)
-    transition = [
-        matching_dict[i + "-" + j]
-        for i, j in zip(first_response.astype(str), transition.astype(str))
-    ]
-    stay = [np.nan] + [i == j for i, j in zip(first_response[:-1], first_response[1:])]
-    print('stay', np.mean(stay))
-    transition_reward = [
-        reward_meaning[r] + "_" + j for r, j in zip(reward, transition)
-    ]
-    rewarded = [reward_meaning[r] for r in reward]
-
-    response_order = [f'{ii}-{jj}-{kk}' for ii, jj, kk in zip(first_response, transition, second_response)]
-
-    data.loc[stage1, "stay"] = stay
-    data.loc[stage1, "transition"] = transition
-    data.loc[stage1, "transition_reward"] = transition_reward
-    data.loc[stage1, "rewarded"] = rewarded
-    data.loc[stage1, "previous_rewarded"] = [np.nan] + rewarded[1:]
-    data.loc[stage1, "response_order"] = response_order
-    
-    for fill_col in [
-        "stay",
-        "transition",
-        "transition_reward",
-        "rewarded",
-        "previous_rewarded",
-        "response_order"
-    ]:
-        data[fill_col] = data[fill_col].replace("", np.nan)
-
-        data[fill_col] = (
-            data.groupby("trial")[fill_col]
-            .apply(lambda group: group.ffill().bfill())
-            .infer_objects(copy=False)
-            .values
-        )
-
-    return data
-
-
-
-def add_risk_sensitive_meaning(data, response_left=0, response_right=1):
-    response_events = data.eval("event_type == 'response'")
-    data["save_or_correct"] = np.nan
-    data["correct_response"] = np.nan
-    data["trial_classification"] = ""
-
-    save_answers = []
-    trial_categories = []
-
-    for ii in data.loc[response_events, "trial_type"].values:
-        tmp1, tmp2 = ii.split("_")
-
-        trial_category, save_answer = None, None
-        if "none" in tmp1 or "none" in tmp2:
-            trial_category = "forced"
-            save_answer = response_right if "none" in tmp1 else response_left
-        elif ii == "risky-80_save-20":
-            trial_category = "risky"
-            save_answer = response_right
-        elif ii == "save-20_risky-80":
-            trial_category = "risky"
-            save_answer = response_left
-        else:
-            ev1, m1 = string_to_ev(tmp1)
-            ev2, m2 = string_to_ev(tmp2)
-
-            if ev1 == ev2:
-                trial_category = "risky"
-                save_answer = response_left if m1 == "save" else response_right
-            else:
-                trial_category = "test"
-                save_answer = response_left if ev1 > ev2 else response_right
-
-        save_answers.append(save_answer)
-        trial_categories.append(trial_category)
-
-    data.loc[response_events, "save_or_correct"] = np.array(save_answers)
-    data.loc[response_events, "trial_classification"] = np.array(trial_categories)
-
-    data["trial_classification"] = data["trial_classification"].replace("", np.nan)
-    data["trial_classification"] = (
-        data.groupby("trial")["trial_classification"]
-        .apply(lambda group: group.ffill().bfill())
-        .infer_objects(copy=False)
-        .values
-    )
-
-    data.loc[response_events, "correct_response"] = (
         data.loc[response_events, "response_button"].astype(float)
         == data.loc[response_events, "save_or_correct"].astype(float)
     ) * 1.0
@@ -236,54 +110,56 @@ def add_twostep_meaning(data):
         "rewarded",
         "previous_rewarded",
         "response_order",
+        "second_response",
+        "first_response",
     ]:
         data[fill_col] = ""
-
+    
+    
     stage1 = data.eval("event_type=='stage-1-selection'")
     
-    first_response = data.query("event_type=='response'").action.values[::2].astype(int)
-    second_response = (
-        data.query("event_type=='response'").action.values[1::2].astype(int)
-    )
-
+    data['trial'] = data['trial'].astype(int)
+    first_response = data.loc[data.query('event_type == "response"').groupby("trial")['action'].idxmin(), 'action'].values.astype(int)
+    second_response = data.loc[data.query('event_type == "response"').groupby("trial")['action'].idxmax(), 'action'].values.astype(int)
     reward = data.query("event_type == 'trial-end'").reward.values.astype(int)
-    transition = data.query(
-        "event_type=='stage-2-selection'"
-    ).current_location.values.astype(int)
-    transition = [
-        matching_dict[i + "-" + j]
-        for i, j in zip(first_response.astype(str), transition.astype(str))
-    ]
-    stay = [np.nan] + [i == j for i, j in zip(first_response[:-1], first_response[1:])]
-    transition_reward = [
-        reward_meaning[r] + "_" + j for r, j in zip(reward, transition)
-    ]
-    rewarded = [reward_meaning[r] for r in reward]
-
-    response_order = [f'{ii}-{jj}-{kk}' for ii, jj, kk in zip(first_response, transition, second_response)]
-
-    data.loc[stage1, "stay"] = stay
-    data.loc[stage1, "stay"] = data.loc[stage1, "stay"].astype(float)
-    data.loc[stage1, "transition"] = transition
-    data.loc[stage1, "transition_reward"] = transition_reward
-    data.loc[stage1, "rewarded"] = rewarded
-    data.loc[stage1, "previous_rewarded"] = [np.nan] + rewarded[1:]
-    data.loc[stage1, "response_order"] = response_order
     
+    transition = data.query("event_type=='stage-2-selection'").current_location.values.astype(int)
+    
+    transition = [matching_dict[i + "-" + j] for i, j in zip(first_response.astype(str), transition.astype(str))]
+    
+    stay = [np.nan] + [i == j for i, j in zip(first_response[:-1], first_response[1:])]
+    
+    transition_reward = [reward_meaning[r] + "_" + j for r, j in zip(reward, transition)]
+    rewarded = [reward_meaning[r] for r in reward]
+    
+    response_order = [f'{ii}-{jj}-{kk}' for ii, jj, kk in zip(first_response, transition, second_response)]
+    #response_order = [np.nan] + [f'{ii}-{kk}' for ii, kk in zip(first_response[:-1],  first_response[1:])]
+    
+    data.loc[stage1, "stay"] = stay
+    data.loc[stage1, "transition"] = transition
+    data.loc[stage1, "transition_reward"] = [np.nan] + transition_reward[:-1]
+    data.loc[stage1, "rewarded"] = rewarded
+    data.loc[stage1, "previous_rewarded"] = [np.nan] + rewarded[:-1]
+    data.loc[stage1, "response_order"] = response_order
+    data.loc[stage1, "first_response"] = first_response
+    data.loc[stage1, "second_response"] = second_response
+
     for fill_col in [
         "stay",
         "transition",
         "transition_reward",
         "rewarded",
         "previous_rewarded",
-        "response_order"
+        "response_order",
+        "second_response",
+        "first_response",
     ]:
         data[fill_col] = data[fill_col].replace("", np.nan)
-
+    
         data[fill_col] = (
             data.groupby("trial")[fill_col]
             .apply(lambda group: group.ffill().bfill())
-            .infer_objects(copy=True)
+            .infer_objects(copy=False)
             .values
         )
 
@@ -378,37 +254,10 @@ def summary_df_risk_sensitive(risk_data, participant):
 
 
 
-def summary_df_gonogo(gonogo_data_pre, participant_id):
-
-    total_reward = gonogo_data_pre.query("event_type == 'trial-end'").total_reward.values[-1]
-    
-    
-    nogos = (
-        gonogo_data_pre.query('event_type=="response" or event_type=="response-time-out"')
-        .groupby("trial_type").action
-        .mean()
-    )
-    nogos['go-punish'] = 1 - nogos['go-punish']
-    nogos['go-win'] = 1 - nogos['go-win']
-    
-    nogos = pd.DataFrame({'trial_type': list(nogos.index) + ['total'], 'value': nogos.values.tolist() + [nogos.mean()]})
-    nogos = add_additional_columns(nogos, ['metric'], ['proportion'])
-    
-    response_count = process_responses(gonogo_data_pre, 'event_type=="response" or event_type=="response-time-out"', ['trial_type', 'action'], 'value')
-    response_count = add_additional_columns(response_count, ['metric'], ['count'])
-    
-    
-    # Combine everything into a long-format dataframe
-    long_format_df = pd.concat([
-        nogos.assign(participant=participant_id, total_reward=total_reward),
-        response_count.assign(participant=participant_id, total_reward=total_reward),
-    ], ignore_index=True)
-
-    return long_format_df
-
-
 def summary_twostep_df(data, participant):
-    
+
+    data.loc[:, 'stay'] = data.loc[:, 'stay'].astype(float) 
+
     temp_df = data.groupby(["transition_reward"]).stay.mean().reset_index().rename(columns={'transition_reward': 'trial_type', "stay": "value"})
     temp_df = add_additional_columns(temp_df, ["metric"], ["proportion"])
 
