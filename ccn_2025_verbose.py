@@ -25,6 +25,7 @@ import warnings
 from typing import Dict, List, Tuple, Union
 
 import matplotlib.pyplot as plt
+
 # %%
 import numpy as np
 import pandas as pd
@@ -119,9 +120,7 @@ class ValenceHybridAgent:
         self.eligibility = np.zeros_like(self.q_mf)
 
         # Using a helper function, to extract exact transition probabilities from
-        self.t_values = self.create_t_values_from_graph(
-            graph=graph, t_values=self.t_values, use_fixed=use_fixed
-        )
+        self.t_values = self.create_t_values_from_graph(graph=graph, t_values=self.t_values, use_fixed=use_fixed)
         self.terminal_states = []
 
         self.rng = check_seed(random_state)
@@ -160,22 +159,14 @@ class ValenceHybridAgent:
 
         # Learning process for Qlearning
         if not terminated:
-            rpe_sarsa = (
-                reward
-                + self.gamma * np.max(self.q_mf[next_obs, :])
-                - self.q_mf[obs, action]
-            )
+            rpe_sarsa = reward + self.gamma * np.max(self.q_mf[next_obs, :]) - self.q_mf[obs, action]
         else:
             rpe_sarsa = reward - self.q_mf[obs, action]
 
         if rpe_sarsa <= 0:
-            self.q_mf += (
-                self.lr_neg * rpe_sarsa * self.eligiblity_decay * self.eligibility
-            )
+            self.q_mf += self.lr_neg * rpe_sarsa * self.eligiblity_decay * self.eligibility
         else:
-            self.q_mf += (
-                self.lr_pos * rpe_sarsa * self.eligiblity_decay * self.eligibility
-            )
+            self.q_mf += self.lr_pos * rpe_sarsa * self.eligiblity_decay * self.eligibility
 
         rpe_forward = 1 - self.t_values[obs, action, next_obs]
 
@@ -192,9 +183,7 @@ class ValenceHybridAgent:
                 else:
                     qval_mb = 0
                     for no in range(self.t_values.shape[2]):
-                        qval_mb += self.t_values[tobs, tact, no] * (
-                            np.max(self.q_mf[no, :])
-                        )
+                        qval_mb += self.t_values[tobs, tact, no] * (np.max(self.q_mf[no, :]))
 
                     self.q_mb[tobs, tact] = qval_mb
 
@@ -472,13 +461,9 @@ def run_episode(env, agent, config: Dict) -> List:
         old_info = info
         action = agent.get_action(obs, info["avail-actions"])
 
-        next_obs, reward, terminated, truncated, info = env.step(
-            action, step_reward=env.name == "two-step"
-        )
+        next_obs, reward, terminated, truncated, info = env.step(action, step_reward=env.name == "two-step")
 
-        episode.append(
-            (action, reward, obs, next_obs, terminated, old_info["avail-actions"])
-        )
+        episode.append((action, reward, obs, next_obs, terminated, old_info["avail-actions"]))
 
         agent.update(obs, action, reward, terminated, next_obs, info=info)
 
@@ -488,9 +473,7 @@ def run_episode(env, agent, config: Dict) -> List:
     return episode
 
 
-def run_episodes(
-    env, agent, seed_int: int
-) -> Tuple[List, List, List, List, List, List]:
+def run_episodes(env, agent, seed_int: int) -> Tuple[List, List, List, List, List, List]:
     """
     Runs the full task of the current environment using a selected agent.
 
@@ -515,14 +498,10 @@ def run_episodes(
     n_episodes = settings["ntrials"]
 
     for trial in range(n_episodes):
-        episode_data = run_episode(
-            env, agent, config=settings["condition_dict"][settings["condition"][trial]]
-        )
+        episode_data = run_episode(env, agent, config=settings["condition_dict"][settings["condition"][trial]])
 
         for ep in episode_data:
-            for step, lst in zip(
-                ep, [actions, rewards, obs0, obs1, terminated, avail_actions]
-            ):
+            for step, lst in zip(ep, [actions, rewards, obs0, obs1, terminated, avail_actions]):
                 lst.append(step)
 
     return actions, rewards, obs0, obs1, terminated, avail_actions
@@ -598,13 +577,9 @@ if not os.path.isfile("rl_simulation.npy") or REDO:
                 )
             ]
 
-            for ag, agn, par in zip(
-                agents + ragents, agent_names + ragents_names, params + [None]
-            ):
+            for ag, agn, par in zip(agents + ragents, agent_names + ragents_names, params + [None]):
                 env = get_env(task, seed=random_state)
-                acti, rew, obs0, obs1, term, avail = run_episodes(
-                    env, ag, seed_int=random_state.integers(10_000)
-                )
+                acti, rew, obs0, obs1, term, avail = run_episodes(env, ag, seed_int=random_state.integers(10_000))
                 ag_valence, ag_model = safe_split(agn)
 
                 # Using loops for collecting data, such as the agent's type,
@@ -616,9 +591,7 @@ if not os.path.isfile("rl_simulation.npy") or REDO:
                     agent_data[mes].append(dat)
 
                 # Collecting task information for each episode (sequences of actions, rewards, etc.).
-                for dat, mes in zip(
-                    [acti, rew, obs0, obs1, term, avail], simulation_data_behav
-                ):
+                for dat, mes in zip([acti, rew, obs0, obs1, term, avail], simulation_data_behav):
                     agent_data[mes].append(dat)
 
         np.save("rl_simulation", agent_data)
@@ -653,9 +626,7 @@ sns.swarmplot(
     ax=axes[0],
 )
 
-sns.barplot(
-    agent_df.query("task == 'two-step'"), x="agent_model", y="reward", ax=axes[1]
-)
+sns.barplot(agent_df.query("task == 'two-step'"), x="agent_model", y="reward", ax=axes[1])
 sns.swarmplot(
     agent_df.query("task == 'two-step'"),
     x="agent_model",
@@ -702,9 +673,7 @@ def loglikelihood_binary(x, *args):
     # Initialize values
     logp_actions = np.zeros(len(actions))
 
-    for t, (a, r, o, ot1, term, ava) in enumerate(
-        zip(actions, rewards, starting, obs, terminated, avail_actions)
-    ):
+    for t, (a, r, o, ot1, term, ava) in enumerate(zip(actions, rewards, starting, obs, terminated, avail_actions)):
         # Apply the softmax transformation
         logp_action = np.log(agent.get_probs(o, ava) + np.finfo(float).eps)
 
@@ -757,9 +726,7 @@ def optimize_loglikelihood(
 
 
 # %%
-def update_recovery_data(
-    recovery_data, idx, task, recov_agent, result, params_name, agent_data
-):
+def update_recovery_data(recovery_data, idx, task, recov_agent, result, params_name, agent_data):
     params_to_track = ["alpha_mf_pos", "alpha_mf_neg", "alpha_mf", "hybrid"]
     recovery_data["set"].append(idx)
     recovery_data["task"].append(task)
@@ -774,9 +741,7 @@ def update_recovery_data(
 
     ag_val, ag_model = safe_split(recov_agent)
     recovery_data["lln"].append(result.fun)
-    recovery_data["bic"].append(
-        len(params_name) * np.log(len(agent_data["actions"][idx])) + 2 * result.fun
-    )
+    recovery_data["bic"].append(len(params_name) * np.log(len(agent_data["actions"][idx])) + 2 * result.fun)
     recovery_data["orig_params"].append(agent_data["params"][idx])
     recovery_data["orig_agent"].append(agent_data["agent"][idx])
     recovery_data["orig_agent_model"].append(agent_data["agent_model"][idx])
@@ -867,9 +832,7 @@ if not os.path.isfile("pm_recovery.npy") or REDO:
 
         for recov_agent in recov_agent_names:
             agent_val, agent_mod = safe_split(recov_agent)
-            agent, agent_fixed_params, agent_free_param_names, agent_free_params = (
-                create_agent(env, agent_val=agent_val, agent_model=agent_mod)
-            )
+            agent, agent_fixed_params, agent_free_param_names, agent_free_params = create_agent(env, agent_val=agent_val, agent_model=agent_mod)
 
             result = optimize_loglikelihood(
                 agent_data_sim["actions"][idx],
@@ -904,20 +867,14 @@ recov_data = pd.DataFrame(recovery_data)
 task_recov_rs = recov_data.query(
     "task=='risk-sensitive' and orig_agent_valence in ['risk-avoidant', 'risk-neutral', 'risk-seeking'] and recov_agent_valence == 'full'"
 )
-original_learning_rate_pos = [
-    task_recov_rs.iloc[i, :]["orig_params"][1] for i in range(task_recov_rs.shape[0])
-]
-original_learning_rate_neg = [
-    task_recov_rs.iloc[i, :]["orig_params"][0] for i in range(task_recov_rs.shape[0])
-]
+original_learning_rate_pos = [task_recov_rs.iloc[i, :]["orig_params"][1] for i in range(task_recov_rs.shape[0])]
+original_learning_rate_neg = [task_recov_rs.iloc[i, :]["orig_params"][0] for i in range(task_recov_rs.shape[0])]
 
 
 task_recov_ts = recov_data.query(
     "task=='two-step' and orig_agent_valence in ['risk-avoidant', 'risk-neutral', 'risk-seeking'] and recov_agent_valence == 'full'"
 )
-original_hybrid = [
-    task_recov_ts.iloc[i, :]["orig_params"][2] for i in range(task_recov_ts.shape[0])
-]
+original_hybrid = [task_recov_ts.iloc[i, :]["orig_params"][2] for i in range(task_recov_ts.shape[0])]
 
 
 # %%
@@ -987,9 +944,7 @@ for ii in range(2, 4):
 
 
 sns.heatmap(
-    calc_conf_matrix(
-        recov_data, "risk-sensitive", "orig_agent_valence", "recov_agent_valence"
-    ),
+    calc_conf_matrix(recov_data, "risk-sensitive", "orig_agent_valence", "recov_agent_valence"),
     annot=True,
     cmap="viridis",
     cbar=False,
@@ -1072,26 +1027,16 @@ if not os.path.isfile("behavioral_simulation.npy") or REDO:
                 )
             ]
 
-            for ag, agn, par in zip(
-                agents + ragents, agent_names + ragents_names, params + [None]
-            ):
-                env = get_env(
-                    task, seed=random_state, render_backend="psychopy-simulate"
-                )
-                simlog = SimulationLogger(
-                    file_name="blank", task=task, participant_id=n
-                )
+            for ag, agn, par in zip(agents + ragents, agent_names + ragents_names, params + [None]):
+                env = get_env(task, seed=random_state, render_backend="psychopy-simulate")
+                simlog = SimulationLogger(file_name="blank", task=task, participant_id=n)
                 simlog.create()
                 env.setup(logger=simlog, window=None, expose_last_stim=True)
                 df, _, _ = run_task(env, logger=simlog, agent=ag, seed=n)
                 agent_data["task"].append(task)
                 agent_data["agent"].append(agn)
-                agent_data["agent_model"].append(
-                    agn.split("_")[1] if agn != "random" else "random"
-                )
-                agent_data["agent_valence"].append(
-                    agn.split("_")[0] if agn != "random" else "random"
-                )
+                agent_data["agent_model"].append(agn.split("_")[1] if agn != "random" else "random")
+                agent_data["agent_valence"].append(agn.split("_")[0] if agn != "random" else "random")
                 agent_data["dataframes"].append(pd.DataFrame(df.close()))
 
     np.save("behavioral_simulation", agent_data)
@@ -1112,12 +1057,7 @@ def add_additional_columns(df, new_col_name=[], new_col_value=[]):
 
 
 def process_responses(data, query_filter, group_by_cols, value_col):
-    return (
-        data.query(query_filter)
-        .groupby(group_by_cols)
-        .size()
-        .reset_index(name=value_col)
-    )
+    return data.query(query_filter).groupby(group_by_cols).size().reset_index(name=value_col)
 
 
 def add_risk_sensitive_meaning(data, response_left=0, response_right=1):
@@ -1170,15 +1110,11 @@ def add_risk_sensitive_meaning(data, response_left=0, response_right=1):
 
     data["trial_classification"] = data["trial_classification"].replace("", np.nan)
     data["trial_classification"] = (
-        data.groupby("trial")["trial_classification"]
-        .apply(lambda group: group.ffill().bfill())
-        .infer_objects(copy=False)
-        .values
+        data.groupby("trial")["trial_classification"].apply(lambda group: group.ffill().bfill()).infer_objects(copy=False).values
     )
 
     data.loc[response_events, "correct_response"] = (
-        data.loc[response_events, "response_button"].astype(float)
-        == data.loc[response_events, "save_or_correct"].astype(float)
+        data.loc[response_events, "response_button"].astype(float) == data.loc[response_events, "save_or_correct"].astype(float)
     ) * 1.0
 
     return data
@@ -1196,9 +1132,7 @@ def summary_df_risk_sensitive(risk_data, participant):
 
     total_reward = risk_data.query("event_type == 'trial-end'").total_reward.values[-1]
 
-    count_responses = add_additional_columns(
-        correct_responses, ["metric"], ["proportion"]
-    )
+    count_responses = add_additional_columns(correct_responses, ["metric"], ["proportion"])
 
     # Extracting counts of correct responses
     count_responses = process_responses(
@@ -1212,9 +1146,7 @@ def summary_df_risk_sensitive(risk_data, participant):
     # Combine everything into a long-format dataframe
     long_format_df = pd.concat(
         [
-            correct_responses.assign(
-                participant=participant, total_reward=total_reward
-            ),
+            correct_responses.assign(participant=participant, total_reward=total_reward),
             count_responses.assign(participant=participant, total_reward=total_reward),
         ],
         ignore_index=True,
@@ -1251,20 +1183,13 @@ def add_twostep_meaning(data):
     ].values.astype(int)
     reward = data.query("event_type == 'trial-end'").reward.values.astype(int)
 
-    transition = data.query(
-        "event_type=='stage-2-selection'"
-    ).current_location.values.astype(int)
+    transition = data.query("event_type=='stage-2-selection'").current_location.values.astype(int)
 
-    transition = [
-        matching_dict[i + "-" + j]
-        for i, j in zip(first_response.astype(str), transition.astype(str))
-    ]
+    transition = [matching_dict[i + "-" + j] for i, j in zip(first_response.astype(str), transition.astype(str))]
 
     stay = [np.nan] + [i == j for i, j in zip(first_response[:-1], first_response[1:])]
 
-    transition_reward = [
-        reward_meaning[r] + "_" + j for r, j in zip(reward, transition)
-    ]
+    transition_reward = [reward_meaning[r] + "_" + j for r, j in zip(reward, transition)]
     rewarded = [reward_meaning[r] for r in reward]
 
     data.loc[stage1, "stay"] = stay
@@ -1275,12 +1200,7 @@ def add_twostep_meaning(data):
 
     for fill_col in new_columns:
         data[fill_col] = data[fill_col].replace("", np.nan)
-        data[fill_col] = (
-            data.groupby("trial")[fill_col]
-            .apply(lambda group: group.ffill().bfill())
-            .infer_objects(copy=False)
-            .values
-        )
+        data[fill_col] = data.groupby("trial")[fill_col].apply(lambda group: group.ffill().bfill()).infer_objects(copy=False).values
 
     return data
 
@@ -1288,12 +1208,7 @@ def add_twostep_meaning(data):
 def summary_twostep_df(data, participant):
     data.loc[:, "stay"] = data.loc[:, "stay"].astype(float)
 
-    temp_df = (
-        data.groupby(["transition_reward"])
-        .stay.mean()
-        .reset_index()
-        .rename(columns={"transition_reward": "trial_type", "stay": "value"})
-    )
+    temp_df = data.groupby(["transition_reward"]).stay.mean().reset_index().rename(columns={"transition_reward": "trial_type", "stay": "value"})
     temp_df = add_additional_columns(temp_df, ["metric"], ["proportion"])
 
     total_reward = data.query("event_type == 'trial-end'").total_reward.values[-1]
@@ -1349,9 +1264,7 @@ rs_df_cc = pd.concat(summary_dfs["risk-sensitive"], ignore_index=False)
 ts_df_cc = pd.concat(summary_dfs["two-step"], ignore_index=False)
 
 plot_df = ts_df_cc.query("metric == 'proportion'")
-plot_df.loc[:, ["reward", "transition"]] = plot_df.trial_type.str.split(
-    "_", expand=True
-).values
+plot_df.loc[:, ["reward", "transition"]] = plot_df.trial_type.str.split("_", expand=True).values
 
 
 sns.barplot(
