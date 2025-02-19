@@ -16,7 +16,7 @@
 # %%
 # #%pip install -r requirements.txt --upgrade
 
-# %%
+# %% jupyter={"source_hidden": true}
 # %reload_ext autoreload
 # %autoreload 2
 
@@ -26,7 +26,6 @@ from typing import Dict, List, Tuple, Union
 
 import matplotlib.pyplot as plt
 
-# %%
 import numpy as np
 import pandas as pd
 import scipy
@@ -44,6 +43,8 @@ pd.set_option("future.no_silent_downcasting", True)
 plt.rcParams.update({"text.usetex": True, "font.family": "Helvetica"})
 plot_format = ".pdf"
 sns.set_context("paper", font_scale=1.2)
+
+
 # %% [markdown]
 # # Setting up the Learners
 
@@ -311,7 +312,7 @@ class ValenceHybridAgent:
 
 # %% [markdown]
 # ## Simple Hybrid Agent
-# %%
+# %% jupyter={"source_hidden": true}
 class HybridAgent(ValenceHybridAgent):
     """
     Simple Q-learning implementation of the hybrid agent. Re-Using the ValenceBased Hybrid agent,
@@ -352,7 +353,7 @@ class HybridAgent(ValenceHybridAgent):
 # ## Random Agent
 #
 
-# %%
+# %% jupyter={"source_hidden": true}
 class RandomAgent(ValenceHybridAgent):
     def __init__(
         self,
@@ -433,7 +434,7 @@ n_agents = 15
 # ## Helper functions
 #
 
-# %%
+# %% jupyter={"source_hidden": true}
 def run_episode(env, agent, config: Dict) -> List:
     """
     Runs a single episode of the task and collecting some data.
@@ -537,7 +538,7 @@ def safe_split(string_to_split: str, split_str="_") -> Tuple[str, str]:
 # %% [markdown]
 # # Simulation
 
-# %%
+# %% jupyter={"source_hidden": true}
 # Create a dictionary containing the necessary info:
 random_state = np.random.default_rng(2025)
 
@@ -604,7 +605,7 @@ else:
 # %% [markdown]
 # # Agent performance on task
 
-# %%
+# %% jupyter={"source_hidden": true}
 agent_df = pd.DataFrame(agent_data_sim)
 fig, axes = plt.subplots(1, 2, figsize=(15, 5))
 axes = axes.flatten()
@@ -723,7 +724,7 @@ def optimize_loglikelihood(
 # ## Helper functions to collect data and set up agents
 #
 
-# %%
+# %% jupyter={"source_hidden": true}
 recovery_df_fields = [
     "task",
     "set",
@@ -815,7 +816,7 @@ def create_agent(env, agent_val="valence", agent_model="model-based"):
 # %% [markdown]
 # ## Optimization loop
 
-# %%
+# %% jupyter={"source_hidden": true}
 recov_agent_names = [
     "valence_model-based",
     "valence_model-free",
@@ -909,7 +910,7 @@ if not os.path.isfile("pm_recovery.npy") or REDO:
 else:
     recovery_data = np.load("pm_recovery.npy", allow_pickle=True).item()
 
-# %%
+# %% jupyter={"source_hidden": true}
 recov_data = pd.DataFrame(recovery_data)
 
 task_recov_rs = recov_data.query(
@@ -925,7 +926,7 @@ task_recov_ts = recov_data.query(
 original_hybrid = [task_recov_ts.iloc[i, :]["orig_params"][2] for i in range(task_recov_ts.shape[0])]
 
 
-# %%
+# %% jupyter={"source_hidden": true}
 def calc_conf_matrix(recov_data, task, agent_orig, agent_recov, normalize=True):
     recov_data_by_set = (
         recov_data.query("task==@task and 'full' not in recov_agent_model")
@@ -950,7 +951,7 @@ def calc_conf_matrix(recov_data, task, agent_orig, agent_recov, normalize=True):
     return conf_matrix
 
 
-# %%
+# %% jupyter={"source_hidden": true}
 fig, axes = plt.subplots(2, 2, figsize=(10, 7.5))
 
 axes = axes.flatten()
@@ -1020,7 +1021,7 @@ plt.savefig(f"rl_recovery{plot_format}", bbox_inches="tight", dpi=600)
 # %% [markdown]
 # # Simulating actual data frames
 
-# %%
+# %% jupyter={"source_hidden": true}
 
 random_state = np.random.default_rng(2025)
 
@@ -1096,7 +1097,7 @@ else:
 # ## Behavioral analyses helper functions
 #
 
-# %%
+# %% jupyter={"source_hidden": true}
 def add_additional_columns(df, new_col_name=[], new_col_value=[]):
     for ncn, ncv in zip(new_col_name, new_col_value):
         df[ncn] = ncv
@@ -1301,7 +1302,7 @@ for n, (df, task, ag, agm, agv) in enumerate(
 rs_df_cc = pd.concat(summary_dfs["risk-sensitive"], ignore_index=False)
 ts_df_cc = pd.concat(summary_dfs["two-step"], ignore_index=False)
 
-# %%
+# %% jupyter={"source_hidden": true}
 fig, axes = plt.subplots(1, 4, figsize=(15, 5))
 
 xorder = ["expected", "unexpected"]
