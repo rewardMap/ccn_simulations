@@ -36,6 +36,8 @@ from rewardgym.psychopy_core import run_task
 from rewardgym.psychopy_render.logger import SimulationLogger
 from rewardgym.utils import check_seed
 from tqdm.auto import tqdm
+from joblib import Parallel, delayed
+
 
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -47,7 +49,7 @@ sns.set_context("paper", font_scale=1.2)
 
 # %% [markdown]
 # ## ValenceHybrid Agent
-
+#
 
 # %%
 class ValenceHybridAgent:
@@ -348,7 +350,7 @@ class HybridAgent(ValenceHybridAgent):
 
 # %% [markdown]
 # ## Random Agent
-
+#
 
 # %%
 class RandomAgent(ValenceHybridAgent):
@@ -384,6 +386,7 @@ class RandomAgent(ValenceHybridAgent):
 
 # %%
 REDO = False
+use_parallel = True
 
 alpha_mf_pos = [0.4, 0.6, 0.8]
 alpha_mf_neg = [0.8, 0.6, 0.4]
@@ -423,12 +426,12 @@ simulation_data_behav = [
 ]
 
 # Number of agents to simulate per agent class:
-n_agents = 2
+n_agents = 15
 
 
 # %% [markdown]
 # ## Helper functions
-
+#
 
 # %%
 def run_episode(env, agent, config: Dict) -> List:
@@ -598,11 +601,6 @@ if not os.path.isfile("rl_simulation.npy") or REDO:
         agent_data_sim = agent_data
 else:
     agent_data_sim = np.load("rl_simulation.npy", allow_pickle=True).item()
-# %%
-safe_split(agn)
-
-# %%
-
 # %% [markdown]
 # # Agent performance on task
 
@@ -649,7 +647,7 @@ plt.savefig(f"rl_simulation_performance{plot_format}", bbox_inches="tight", dpi=
 # # Parameter and model recovery
 #
 # ## Helper functions for optimization
-
+#
 
 # %%
 def loglikelihood_binary(x, *args):
@@ -695,7 +693,7 @@ def optimize_loglikelihood(
     parameter_names: List,
     parameter_settings: Dict,
     agent,
-    method: str = "L-BFGS-B",
+    method: str = "Nelder-Mead",
 ):
     initial_params = [parameter_settings[i]["initial"] for i in parameter_names]
     bounds = tuple(parameter_settings[i]["bounds"] for i in parameter_names)
@@ -723,32 +721,60 @@ def optimize_loglikelihood(
 
 # %% [markdown]
 # ## Helper functions to collect data and set up agents
-
+#
 
 # %%
-def update_recovery_data(recovery_data, idx, task, recov_agent, result, params_name, agent_data):
+recovery_df_fields = [
+    "task",
+    "set",
+    "recov_agent",
+    "alpha_mf_pos",
+    "alpha_mf_neg",
+    "alpha_mf",
+    "hybrid",
+    "lln",
+    "bic",
+    "orig_params",
+    "orig_agent",
+    "orig_agent_model",
+    "orig_agent_valence",
+    "recov_agent_model",
+    "recov_agent_valence",
+]
+
+
+def return_data(idx, task, recov_agent, result, params_name, agent_data):
+
+    recovery_data = {key: [] for key in recovery_df_fields}
     params_to_track = ["alpha_mf_pos", "alpha_mf_neg", "alpha_mf", "hybrid"]
-    recovery_data["set"].append(idx)
-    recovery_data["task"].append(task)
-    recovery_data["recov_agent"].append(recov_agent)
+
+    recovery_data["set"] = idx
+    recovery_data["task"] = task
+    recovery_data["recov_agent"] = recov_agent
 
     for pc, pn in enumerate(params_name):
         if pn in params_to_track:
-            recovery_data[pn].append(result.x[pc])
+            recovery_data[pn] = result.x[pc]
 
     for pn in set(params_to_track) - set(params_name):
-        recovery_data[pn].append(np.nan)
+        recovery_data[pn] = np.nan
 
+    if recov_agent in ['random']:
+        nopa = 0
+    else: 
+        nopa = len(params_name)
+    
     ag_val, ag_model = safe_split(recov_agent)
-    recovery_data["lln"].append(result.fun)
-    recovery_data["bic"].append(len(params_name) * np.log(len(agent_data["actions"][idx])) + 2 * result.fun)
-    recovery_data["orig_params"].append(agent_data["params"][idx])
-    recovery_data["orig_agent"].append(agent_data["agent"][idx])
-    recovery_data["orig_agent_model"].append(agent_data["agent_model"][idx])
-    recovery_data["orig_agent_valence"].append(agent_data["agent_valence"][idx])
-    recovery_data["recov_agent_model"].append(ag_model)
-    recovery_data["recov_agent_valence"].append(ag_val)
+    recovery_data["lln"] = result.fun
+    recovery_data["bic"] = nopa * np.log(len(agent_data["actions"][idx])) + 2 * result.fun
+    recovery_data["orig_params"] = agent_data["params"][idx]
+    recovery_data["orig_agent"] = agent_data["agent"][idx]
+    recovery_data["orig_agent_model"] = agent_data["agent_model"][idx]
+    recovery_data["orig_agent_valence"] = agent_data["agent_valence"][idx]
+    recovery_data["recov_agent_model"] = ag_model
+    recovery_data["recov_agent_valence"] = ag_val
 
+    return [recovery_data[rf] for rf in recovery_df_fields]
 
 def create_agent(env, agent_val="valence", agent_model="model-based"):
     agent_fixed_params = {
@@ -786,25 +812,6 @@ def create_agent(env, agent_val="valence", agent_model="model-based"):
         agent_free_params["hybrid"] = {"initial": 0.5, "bounds": [0, 1]}
 
     return agent, agent_fixed_params, agent_free_param_names, agent_free_params
-
-
-recovery_df_fields = [
-    "task",
-    "set",
-    "recov_agent",
-    "alpha_mf_pos",
-    "alpha_mf_neg",
-    "alpha_mf",
-    "hybrid",
-    "lln",
-    "bic",
-    "orig_params",
-    "orig_agent",
-    "orig_agent_model",
-    "orig_agent_valence",
-    "recov_agent_model",
-    "recov_agent_valence",
-]
 # %% [markdown]
 # ## Optimization loop
 
@@ -818,23 +825,21 @@ recov_agent_names = [
     "random",
 ]
 
-if not os.path.isfile("pm_recovery.npy") or REDO:
-    # Initialize recovery data dictionary
-    recovery_data = {key: [] for key in recovery_df_fields}
+def process_task(idx: int, task: str, agent_data_sim: Dict, recov_agent_names: str, recovery_data: Dict, n_restarts=5):
+    """
+    Helper function to do inference on a single agent.
+    """
+    env = get_env(task)
+    recov_data = []
 
-    # Main loop
-    for idx, task in tqdm(
-        enumerate(agent_data_sim["task"]),
-        total=len(agent_data_sim["task"]),
-        desc="Inferring task data",
-    ):
-        env = get_env(task)
+    for recov_agent in recov_agent_names:
+        agent_val, agent_mod = safe_split(recov_agent)
+        agent, agent_fixed_params, agent_free_param_names, agent_free_params = create_agent(env, agent_val=agent_val, agent_model=agent_mod)
 
-        for recov_agent in recov_agent_names:
-            agent_val, agent_mod = safe_split(recov_agent)
-            agent, agent_fixed_params, agent_free_param_names, agent_free_params = create_agent(env, agent_val=agent_val, agent_model=agent_mod)
-
-            result = optimize_loglikelihood(
+        fun_threshold = np.inf
+        
+        for n in range(n_restarts):
+            tmp_result = optimize_loglikelihood(
                 agent_data_sim["actions"][idx],
                 agent_data_sim["rewards"][idx],
                 agent_data_sim["obs0"][idx],
@@ -847,15 +852,58 @@ if not os.path.isfile("pm_recovery.npy") or REDO:
                 agent=agent,
             )
 
-            update_recovery_data(
-                recovery_data,
-                idx,
-                task,
-                recov_agent,
-                result,
-                agent_free_param_names,
-                agent_data_sim,
+            if n == 0:
+                result = tmp_result
+            elif n > 0 and tmp_result.fun < result.fun:
+                result = tmp_result
+            
+
+        recov_data.append(return_data(
+            idx,
+            task,
+            recov_agent,
+            result,
+            agent_free_param_names,
+            agent_data_sim,
+        ))
+    
+    return recov_data
+
+
+if not os.path.isfile("pm_recovery.npy") or REDO:
+    # Initialize recovery data dictionary
+
+    recovery_data = {key: [] for key in recovery_df_fields}
+
+    if use_parallel:
+        # Run the loop in parallel
+        recovered = Parallel(n_jobs=-1)(
+            delayed(process_task)(idx, task, agent_data_sim, recov_agent_names, recovery_data)
+            for idx, task in tqdm(
+                enumerate(agent_data_sim["task"]),
+                total=len(agent_data_sim["task"]),
+                desc="Inferring task data",
             )
+        )
+        # Additionally flatten output
+        recovered2 = []
+        for sublist in recovered:
+            recovered2.extend(sublist)
+        recovered = recovered2
+    else:
+        # Main loop
+        for idx, task in tqdm(
+            enumerate(agent_data_sim["task"]),
+            total=len(agent_data_sim["task"]),
+            desc="Inferring task data",
+        ):
+            env = get_env(task)
+            recovered.extend(process_task(idx=idx, task=task, agent_data_sim=agent_data_sim, recov_agent_names=recov_agent_names,
+                                recovery_data=recovery_data))
+
+    for re in recovered:
+        for rf, rd in zip(recovery_df_fields, re):
+            recovery_data[rf].append(rd)
 
     np.save("pm_recovery", recovery_data)
 else:
@@ -1046,7 +1094,7 @@ else:
 
 # %% [markdown]
 # ## Behavioral analyses helper functions
-
+#
 
 # %%
 def add_additional_columns(df, new_col_name=[], new_col_value=[]):
@@ -1375,5 +1423,3 @@ for ii in range(4):
 
 plt.tight_layout()
 plt.savefig(f"behavioral_simulation{plot_format}", bbox_inches="tight", dpi=600)
-
-# %%
