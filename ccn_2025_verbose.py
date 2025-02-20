@@ -312,7 +312,7 @@ class ValenceHybridAgent:
 
 # %% [markdown]
 # ## Simple Hybrid Agent
-# %% jupyter={"source_hidden": true}
+# %%
 class HybridAgent(ValenceHybridAgent):
     """
     Simple Q-learning implementation of the hybrid agent. Re-Using the ValenceBased Hybrid agent,
@@ -353,7 +353,7 @@ class HybridAgent(ValenceHybridAgent):
 # ## Random Agent
 #
 
-# %% jupyter={"source_hidden": true}
+# %%
 class RandomAgent(ValenceHybridAgent):
     def __init__(
         self,
@@ -1021,7 +1021,7 @@ plt.savefig(f"rl_recovery{plot_format}", bbox_inches="tight", dpi=600)
 # %% [markdown]
 # # Simulating actual data frames
 
-# %% jupyter={"source_hidden": true}
+# %%
 
 random_state = np.random.default_rng(2025)
 
@@ -1097,7 +1097,7 @@ else:
 # ## Behavioral analyses helper functions
 #
 
-# %% jupyter={"source_hidden": true}
+# %%
 def add_additional_columns(df, new_col_name=[], new_col_value=[]):
     for ncn, ncv in zip(new_col_name, new_col_value):
         df[ncn] = ncv
@@ -1159,7 +1159,8 @@ def add_risk_sensitive_meaning(data, response_left=0, response_right=1):
 
     data["trial_classification"] = data["trial_classification"].replace("", np.nan)
     data["trial_classification"] = (
-        data.groupby("trial")["trial_classification"].apply(lambda group: group.ffill().bfill()).infer_objects(copy=False).values
+        data.groupby("trial")["trial_classification"]
+        .transform(lambda group: group.ffill().bfill())
     )
 
     data.loc[response_events, "correct_response"] = (
@@ -1249,7 +1250,7 @@ def add_twostep_meaning(data):
 
     for fill_col in new_columns:
         data[fill_col] = data[fill_col].replace("", np.nan)
-        data[fill_col] = data.groupby("trial")[fill_col].apply(lambda group: group.ffill().bfill()).infer_objects(copy=False).values
+        data[fill_col] = data.groupby("trial")[fill_col].transform(lambda group: group.ffill().bfill())
 
     return data
 
@@ -1302,11 +1303,11 @@ for n, (df, task, ag, agm, agv) in enumerate(
 rs_df_cc = pd.concat(summary_dfs["risk-sensitive"], ignore_index=False)
 ts_df_cc = pd.concat(summary_dfs["two-step"], ignore_index=False)
 
-# %% jupyter={"source_hidden": true}
+# %%
 fig, axes = plt.subplots(1, 4, figsize=(15, 5))
 
-xorder = ["expected", "unexpected"]
-horder = ["reward", "no-reward"]
+horder = ["expected", "unexpected"]
+xorder = ["reward", "no-reward"]
 ts_models = ["Two-step:\nmodel-free", "Two-step:\nmodel-based", "Two-step:\nrandom"]
 
 rs_df_cc = pd.concat(summary_dfs["risk-sensitive"], ignore_index=False)
@@ -1318,8 +1319,8 @@ plot_df.loc[:, ["reward", "transition"]] = plot_df.trial_type.str.split("_", exp
 
 sns.barplot(
     plot_df.query("agent_model=='model-free'"),
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1327,8 +1328,8 @@ sns.barplot(
 )
 sns.swarmplot(
     plot_df.query("agent_model=='model-free'"),
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1341,8 +1342,8 @@ sns.swarmplot(
 
 sns.barplot(
     plot_df.query("agent_model=='model-based'"),
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1351,8 +1352,8 @@ sns.barplot(
 sns.swarmplot(
     plot_df.query("agent_model=='model-based'"),
     size=3,
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1363,8 +1364,8 @@ sns.swarmplot(
 
 sns.barplot(
     plot_df.query("agent_model=='random'"),
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1373,8 +1374,8 @@ sns.barplot(
 sns.swarmplot(
     plot_df.query("agent_model=='random'"),
     size=3,
-    x="transition",
-    hue="reward",
+    x="reward",
+    hue="transition",
     order=xorder,
     hue_order=horder,
     y="value",
@@ -1405,7 +1406,7 @@ for ii in range(4):
         axes[ii].set(
             ylabel="proportion stay",
             title=ts_models[ii - 1],
-            xlabel="previous transition",
+            xlabel="previous reward",
         )
     axes[ii].spines["top"].set_visible(False)
     axes[ii].spines["right"].set_visible(False)
@@ -1413,7 +1414,7 @@ for ii in range(4):
     if ii in [2, 3]:
         axes[ii].legend().set_visible(False)
     elif ii == 1:
-        axes[ii].legend(title="previous reward")
+        axes[ii].legend(title="previous transition")
 
     if ii == 0:
         axes[ii].set(
@@ -1424,3 +1425,5 @@ for ii in range(4):
 
 plt.tight_layout()
 plt.savefig(f"behavioral_simulation{plot_format}", bbox_inches="tight", dpi=600)
+
+# %%
