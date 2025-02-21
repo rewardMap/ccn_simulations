@@ -49,8 +49,61 @@ sns.set_context("paper", font_scale=1.2)
 # # Setting up the Learners
 
 # %% [markdown]
-# ## ValenceHybrid Agent
+# Because of the graph structure at the basis of each task, we can formalize a single model, that tests multiple computational theories. The framework provides the agent with an observation ($s_t$), which is used by the agent to sample an action ($a_t$), for which the agent receives the next observation ($s_{t+1}$) and a reward ($r_t$), where $t$ indicates the current step within a trial (or episode). To solve the two-step task, we use an off-policy implementation (Economides et al., 2015) of a hybrid agent that encompasses both model-free and model-based reinforcement learning strategies(Gläscher et al. 2010) and is typically used for this task (Daw et al. 2011). We augment the hybrid agent, with two learning rates for positive and negative reward prediction errors, which have a distinct influence on risk-taking behavior in the risk-sensitive task (Niv et al. 2012).
 #
+# **Model-free learner:**
+# The model-free learner is a classic Q-learning agent with eligibility traces (Economides et al., 2015). We represent the different $Q$ values as a $n_{\text{states}} \times n_{\text{actions}}$ matrix, where the eligibility traces $e$ have the same dimensions. In each step, we update the eligibility traces by the visited state action pair:
+#
+# $$e(s_t,a_t) = e(s_t, a_t)  + 1$$
+#
+# Then the reward prediction error ($\delta_{rpe})$ is calculated using a TD-learning rule:
+# $$
+# \delta_{\text{rpe}} = 
+# \begin{cases}r_t - Q(s_t, a_t), & \text{if } s_t \text{ is terminal}\\
+# r_t + \gamma * \max_{a} Q(s_{t+1}, a) - Q(s_t, a_t), & \text{else}
+# \end{cases}
+# $$
+# The model-free Q-values ($Q_{MF}$) are then updated with the eligibility traces:
+# $$
+#     Q_{MF}= 
+# \begin{cases}
+#     Q_{MF} + \alpha^+ *\delta_{\text{rpe}} * e,& \text{if } \delta_{\text{rpe}}> 0\\
+#     Q_{MF} + \alpha^- *\delta_{\text{rpe}} * e,& \text{if } \delta_{\text{rpe}}\leq 0\\
+# \end{cases}
+# $$
+# In the final step, decay is applied to the eligibility traces:
+# $$e(s, a) = \lambda * \gamma*e$$ 
+# As is commonly done, the eligibility traces are reset to 0 at the end of each trial (Economides et al., 2015).
+#
+# **Model-based learner:**
+# The model-based part of the model learns the state transition matrix $T$, with dimensions $n_{\text{states}} \times n_{\text{actions}} \times n_{\text{states}}$ using the state prediction error, as implemented in \cite{glascherStatesRewardsDissociable2010}:
+#
+# $$\delta_{\text{spe}} = 1 - T(s_t, a_t, s_{t+1})$$
+#
+# This is updated at each step:
+#
+# $$T(s_t,a_t, s_{t+1}) = T(s_t, a_t, s_{t+1}) + \eta * \delta_{spe}$$
+# To keep $T$ in the range $0$ to $1$, the other transitions are multiplied by $1 - \eta$
+# $$
+# T(s_t, a_t, s_{t+1}') = T(s_t, a_t, s_{t+1}') * (1-\eta), \text{ where } s_{t+1}'\neq s_{t+1}
+# $$
+#
+# After each update of $T$ and $Q_{MF}$, all $Q_{MB}$ are updated as well. For each state $s$ that is not terminal, the updating of $Q_{MB}$ uses the below rule:
+# $$Q_{MB}(s_t, a_t) = T(s_t, a_t, s_{t+1}) * \max_{a} Q_{MF}(s_t, a_t),$$ for terminal $s$, $Q_{MB}$ and $Q_{MF}$ are identical: $Q_{MB}(s, a)=Q_{MF}(s, a)$.
+#
+# Finally, we combine model-free and model-based $Q$ values using the weighting parameter $w$:
+#
+# $$Q_{HYB} = w * Q_{MB}(s,a) + (1 - w) * Q_{MF}(s,a)$$
+#
+# Actions by the agent are sampled using a softmax decision rule, with the inverse temperature $\beta$. To accompany task designs, such as the one used in the risk-sensitive task, we calculate the probabilities, only based on the actions that are available in the current step:
+# $$Q_{\text{avail}} = Q[s, a \in A_{avail}]$$
+#
+# $$P(s, a) = \frac{\exp (Q_{avail}(s, a) * \beta)}{\sum_{b=1}^n\exp (Q_{avail}(s, b) * \beta)} $$
+#
+# While these computations are formally employed by the agent, we implemented a commonly used short-cut, assuming that the agent has full knowledge about the transition probabilities ($T$)  (Economides et al., 2015). In our framework, we provide utilities so that $T$ is initialized with the correct probabilities, using the graph model. This shortcut, allows us to ignore the learning rate of the model-based agent ($\eta=0$), which is irrelevant for the risk-sensitive task, as the first state is already terminal. Following Economides et al. (2015), we also keep the decay of the eligibility traces and the discount rate fixed to $1.0$ ($\lambda=1.0$, $\gamma=1.0$). For simulation, we use an inverse temperature of $\beta=5.0$.
+
+# %% [markdown]
+# ## ValenceHybrid Agent
 
 # %%
 class ValenceHybridAgent:
@@ -312,6 +365,8 @@ class ValenceHybridAgent:
 
 # %% [markdown]
 # ## Simple Hybrid Agent
+#
+# This is the same implementation of the ValenceHybridAgent, except for using a single learning rate $\alpha$.
 # %%
 class HybridAgent(ValenceHybridAgent):
     """
@@ -352,6 +407,7 @@ class HybridAgent(ValenceHybridAgent):
 # %% [markdown]
 # ## Random Agent
 #
+# This agent samples actions from the available actions with uniform probability.
 
 # %%
 class RandomAgent(ValenceHybridAgent):
@@ -383,7 +439,8 @@ class RandomAgent(ValenceHybridAgent):
 
 
 # %% [markdown]
-# # We here define the parameters for our Simulation
+# # Simulation Study
+# To model the behavior which we would expect under different parameterizations of the agent, we simulate data from agents with six different parameter settings. These different sets of parameters either show model-free or model-based decision-making in the two-step task, or they demonstrate risk-averse, risk-neutral, or risk-seeking behavior in the risk-sensitive task. For this small simulation study, each agent performs each of the tasks 15 times. There are 183 trials in the risk-sensitive task, following the design in Rosenbaum et al. (2022), and 180 trials in the two-step task.
 
 # %%
 REDO = False
@@ -431,8 +488,9 @@ n_agents = 15
 
 
 # %% [markdown]
-# ## Helper functions
+# ### Helper functions
 #
+# For the simulation we use a few helper functions, that allow us to collect data conveniently.
 
 # %% jupyter={"source_hidden": true}
 def run_episode(env, agent, config: Dict) -> List:
@@ -536,7 +594,9 @@ def safe_split(string_to_split: str, split_str="_") -> Tuple[str, str]:
 
 
 # %% [markdown]
-# # Simulation
+# ## Simulation
+#
+# This is the main loop we employ to simulate data from agents under the different parameter settings.
 
 # %% jupyter={"source_hidden": true}
 # Create a dictionary containing the necessary info:
@@ -603,7 +663,9 @@ if not os.path.isfile("rl_simulation.npy") or REDO:
 else:
     agent_data_sim = np.load("rl_simulation.npy", allow_pickle=True).item()
 # %% [markdown]
-# # Agent performance on task
+# ## Benchmarking results
+#
+# As a benchmark, we simply use the total reward accrued by each of the agents. We see in the risk-sensitive task that the risk-seeking agent has a slight edge over the other agents and that all agents perform better than random. In the two-step task, there are no clear differences between strategies, where even random behavior can be a valid strategy. 
 
 # %% jupyter={"source_hidden": true}
 agent_df = pd.DataFrame(agent_data_sim)
@@ -647,8 +709,26 @@ plt.savefig(f"rl_simulation_performance{plot_format}", bbox_inches="tight", dpi=
 # %% [markdown]
 # # Parameter and model recovery
 #
-# ## Helper functions for optimization
+# The simulated data were also subjected to model recovery and parameter recovery analyses. Here, we inverted six different models: a full model, where $\alpha^+$, $\alpha^-$, and $w$ were free parameters, a model-free classic Q-agent with fixed $w=0$ and a single free learning rate $\alpha$,  a model-based classic Q-agent with fixed $w=1$ and  as single $\alpha$, a model-free risk-sensitive Q-agent with fixed $w=0$, and free learning rates $\alpha^+$, and $\alpha^-$, a model-based risk-sensitive Q-agent with fixed $w=1$, and free $\alpha^+$, and $\alpha^-$, and a random agent, which has uniform probability over its available actions.
 #
+# We optimized each agent on each of the simulated datasets, using `scipy.otimize.minimize` (Virtanen et al., 2020), using the Nelder-Mead algorithm. We set initial parameters of all free parameters to 0.5 and added bounds of $[0, 1]$.
+# Optimization was done using the negative log likelihood ($-\ln L$) which was defined as:
+# $$-\ln L = -\ln\sum_{t}P(s_t,a_t)$$
+#
+# Parameters were thus selected as:
+#
+# $$
+# \hat{\theta} = \arg\min_{\theta} \left( -\ln L(\theta; s_t, a_t, r_t, s_{t+1}, \text{avail actions}) \right)
+# $$
+#
+# To account for local minima and other potential convergence issues, we restarted the optimization five times, selecting the outcome with the lowest negative log-likelihood. 
+#
+# This model inference step highlights one of the strengths of our framework. Due to the standardized form of defining environments and how artificial agents interact with them, we can re-use the agent's code used for simulation also for model inference.
+# In the optimization procedure, we can loop over the collected data of each step ($s_{t}$, $a_{t}$, $s_{t+1}$, $r_t$, and available actions) and use the same implementation of the agent we used for simulation using the agent's `update` and `get_probs` methods. The `update` method, performs the updating step of the Q-values as described above. The `get_probs` method, returns the probabilities of the available actions via softmax, which we can use to calculate the log-likelihood. Because we can write each agent in this way, there is only a need to write optimization procedures once, reducing the need for specialized code. 
+#
+# For model comparison, we calculate the Bayesian information criterion:
+# $$BIC = p * \ln n - 2 \ln L,$$
+# where $p$ is the number of free parameters and $n$ the number of steps (available data points). The random agent, in this case, does not have free parameters and thus reduces to $-2\ln L$. 
 
 # %%
 def loglikelihood_binary(x, *args):
@@ -721,7 +801,7 @@ def optimize_loglikelihood(
 
 
 # %% [markdown]
-# ## Helper functions to collect data and set up agents
+# ### Helper functions to collect data and set up agents
 #
 
 # %% jupyter={"source_hidden": true}
@@ -926,7 +1006,7 @@ task_recov_ts = recov_data.query(
 original_hybrid = [task_recov_ts.iloc[i, :]["orig_params"][2] for i in range(task_recov_ts.shape[0])]
 
 
-# %% jupyter={"source_hidden": true}
+# %%
 def calc_conf_matrix(recov_data, task, agent_orig, agent_recov, normalize=True):
     recov_data_by_set = (
         recov_data.query("task==@task and 'full' not in recov_agent_model")
@@ -950,6 +1030,13 @@ def calc_conf_matrix(recov_data, task, agent_orig, agent_recov, normalize=True):
 
     return conf_matrix
 
+
+# %% [markdown]
+# ## Recovery results
+# As in the benchmarking step, we collapsed the model comparison step over model-free and model-based agents in the risk-sensitive task and over risk behavior in the two-step task. We see that in both tasks, the generative model class of interest can be recovered, by selecting the agent with the lowest $BIC$.
+#
+# We further tested if the full agent could accurately recover parameters of interest in the risk-sensitive ($\alpha^+, \alpha^-$) and in the two-step tasks ($w$) we see that the recovered parameters are highly correlated with the original parameters.
+#
 
 # %% jupyter={"source_hidden": true}
 fig, axes = plt.subplots(2, 2, figsize=(10, 7.5))
@@ -1019,10 +1106,11 @@ plt.tight_layout()
 plt.savefig(f"rl_recovery{plot_format}", bbox_inches="tight", dpi=600)
 
 # %% [markdown]
-# # Simulating actual data frames
+# # Behavioral Simulation
+# We further investigate if the agents show the expected behavioral patterns that are predicted by the respective computational theories.
+# In the risk-sensitive task, we see how the proportion of safe choices is related to the balance of positive and negative learning rates as predicted by the model (Niv et al. 2012; Rosenbaum et al. 2022)  In the two-step task, agents following model-based strategies are more likely to repeat the previous first-level choice after expected and rewarded, as well as unexpected and not rewarded transitions. The model-free agents in contrast will stick to the rewarded choice, independent of the transition (Decker et al. 2016) . 
 
-# %%
-
+# %% jupyter={"source_hidden": true}
 random_state = np.random.default_rng(2025)
 
 simulation_data_core = [
@@ -1094,10 +1182,9 @@ else:
 
 
 # %% [markdown]
-# ## Behavioral analyses helper functions
-#
+# ### Behavioral analyses helper functions
 
-# %%
+# %% jupyter={"source_hidden": true}
 def add_additional_columns(df, new_col_name=[], new_col_value=[]):
     for ncn, ncv in zip(new_col_name, new_col_value):
         df[ncn] = ncv
@@ -1274,7 +1361,7 @@ def summary_twostep_df(data, participant):
     return long_format_df
 
 
-# %%
+# %% jupyter={"source_hidden": true}
 summary_dfs = {ii: [] for ii in ["risk-sensitive", "two-step"]}
 
 for n, (df, task, ag, agm, agv) in enumerate(
@@ -1303,7 +1390,7 @@ for n, (df, task, ag, agm, agv) in enumerate(
 rs_df_cc = pd.concat(summary_dfs["risk-sensitive"], ignore_index=False)
 ts_df_cc = pd.concat(summary_dfs["two-step"], ignore_index=False)
 
-# %%
+# %% jupyter={"source_hidden": true}
 fig, axes = plt.subplots(1, 4, figsize=(15, 5))
 
 horder = ["expected", "unexpected"]
